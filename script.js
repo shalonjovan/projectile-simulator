@@ -1,7 +1,6 @@
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-// Resize canvas to fit screen
 canvas.width = window.innerWidth - 320;
 canvas.height = window.innerHeight - 40;
 
@@ -9,10 +8,11 @@ canvas.height = window.innerHeight - 40;
 const angleInput = document.getElementById("angle");
 const velocityInput = document.getElementById("velocity");
 const gravityInput = document.getElementById("gravity");
+
 const outletXInput = document.getElementById("outletX");
 const outletYInput = document.getElementById("outletY");
 
-// Display spans
+// Value displays
 const angleVal = document.getElementById("angleVal");
 const velocityVal = document.getElementById("velocityVal");
 const gravityVal = document.getElementById("gravityVal");
@@ -22,18 +22,38 @@ const outletYVal = document.getElementById("outletYVal");
 const launchBtn = document.getElementById("launch");
 const resetBtn = document.getElementById("reset");
 
-let time = 0;
-let animationId = null;
+const SCALE = 6;
+let projectiles = [];
 
-// Store landed projectiles
-let landedProjectiles = [];
+// Drag logic
+let draggingOutlet = false;
 
-// Update UI values
+// UI updates
 angleInput.oninput = () => angleVal.textContent = angleInput.value;
 velocityInput.oninput = () => velocityVal.textContent = velocityInput.value;
 gravityInput.oninput = () => gravityVal.textContent = gravityInput.value;
 outletXInput.oninput = () => outletXVal.textContent = outletXInput.value;
 outletYInput.oninput = () => outletYVal.textContent = outletYInput.value;
+
+// Draw grid
+function drawGrid() {
+  ctx.strokeStyle = "#222";
+  ctx.lineWidth = 1;
+
+  for (let x = 0; x < canvas.width; x += 50) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+
+  for (let y = 0; y < canvas.height; y += 50) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+}
 
 // Draw outlet
 function drawOutlet(x, y) {
@@ -49,63 +69,88 @@ function drawBall(x, y, color = "red") {
   ctx.fill();
 }
 
-// Draw everything
-function redrawScene() {
+// Main render loop
+function update() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Draw old landed projectiles
-  landedProjectiles.forEach(p => {
-    drawBall(p.x, p.y, "#ff9933");
+  drawGrid();
+
+  // Update projectiles
+  projectiles.forEach(p => {
+    if (!p.active) return;
+
+    p.t += 0.05;
+
+    const x = p.x0 + p.vx * p.t * SCALE;
+    const y = p.y0 - (p.vy * p.t * SCALE - 0.5 * gravityInput.value * p.t * p.t * SCALE);
+
+    if (y > canvas.height - 5) {
+      p.active = false;
+      p.y = canvas.height - 5;
+      p.x = x;
+    } else {
+      p.x = x;
+      p.y = y;
+    }
+
+    drawBall(p.x, p.y);
   });
 
-  // Draw outlet
   drawOutlet(outletXInput.value, outletYInput.value);
+
+  requestAnimationFrame(update);
 }
 
-// Animation loop
-function animate() {
-  redrawScene();
-
+// Launch new projectile
+launchBtn.onclick = () => {
   const angle = angleInput.value * Math.PI / 180;
   const velocity = velocityInput.value;
-  const gravity = gravityInput.value;
 
-  const outletX = Number(outletXInput.value);
-  const outletY = Number(outletYInput.value);
-
-  const vx = velocity * Math.cos(angle);
-  const vy = velocity * Math.sin(angle);
-
-  const x = outletX + vx * time * 6;
-  const y = outletY - (vy * time * 6 - 0.5 * gravity * time * time * 6);
-
-  drawBall(x, y);
-
-  time += 0.05;
-
-  // Stop when hits bottom of screen
-  if (y < canvas.height - 5) {
-    animationId = requestAnimationFrame(animate);
-  } else {
-    // Store landed projectile
-    landedProjectiles.push({ x, y: canvas.height - 5 });
-  }
-}
-
-// Launch
-launchBtn.onclick = () => {
-  cancelAnimationFrame(animationId);
-  time = 0;
-  animate();
+  projectiles.push({
+    x0: Number(outletXInput.value),
+    y0: Number(outletYInput.value),
+    vx: velocity * Math.cos(angle),
+    vy: velocity * Math.sin(angle),
+    t: 0,
+    active: true
+  });
 };
 
 // Reset
 resetBtn.onclick = () => {
-  cancelAnimationFrame(animationId);
-  time = 0;
-  landedProjectiles = [];
-  redrawScene();
+  projectiles = [];
 };
 
-// Initial draw
-redrawScene();
+// Mouse interaction for dragging outlet
+canvas.addEventListener("mousedown", e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const ox = outletXInput.value;
+  const oy = outletYInput.value;
+
+  if (Math.abs(mx - ox) < 15 && Math.abs(my - oy) < 15) {
+    draggingOutlet = true;
+  }
+});
+
+canvas.addEventListener("mousemove", e => {
+  if (!draggingOutlet) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  outletXInput.value = Math.max(0, Math.min(canvas.width, mx));
+  outletYInput.value = Math.max(0, Math.min(canvas.height, my));
+
+  outletXVal.textContent = outletXInput.value;
+  outletYVal.textContent = outletYInput.value;
+});
+
+canvas.addEventListener("mouseup", () => draggingOutlet = false);
+canvas.addEventListener("mouseleave", () => draggingOutlet = false);
+
+// Start loop
+update();
