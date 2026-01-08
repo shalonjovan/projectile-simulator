@@ -22,6 +22,7 @@ const zoomVal = document.getElementById("zoomVal");
 const slowBtn = document.getElementById("slow");
 const pathToggleBtn = document.getElementById("pathToggle");
 const cameraToggleBtn = document.getElementById("cameraToggle");
+const blockModeBtn = document.getElementById("blockMode");
 
 const launchBtn = document.getElementById("launch");
 const resetBtn = document.getElementById("reset");
@@ -33,13 +34,20 @@ let timeScale = 1;
 
 let showPath = true;
 let cameraFollow = false;
+let blockMode = false;
 
 let cameraOffsetX = 0;
 let cameraOffsetY = 0;
 
 let projectiles = [];
+let blocks = [];
+
 let draggingOutlet = false;
 let rotatingAngle = false;
+let drawingBlock = false;
+
+let blockStart = null;
+let previewBlock = null;
 
 // ================= UI SYNC =================
 function syncUI() {
@@ -95,7 +103,6 @@ function drawOutlet(x, y) {
   ctx.fillStyle = "#1e90ff";
   ctx.fillRect(x + cameraOffsetX - 10, y + cameraOffsetY - 10, 20, 20);
 
-  // Angle indicator
   ctx.strokeStyle = "#0ff";
   ctx.beginPath();
   ctx.moveTo(x + cameraOffsetX, y + cameraOffsetY);
@@ -113,10 +120,32 @@ function drawBall(x, y) {
   ctx.fill();
 }
 
+function drawBlock(b, preview = false) {
+  ctx.fillStyle = preview ? "rgba(0,200,0,0.3)" : "rgba(200,200,200,0.6)";
+  ctx.fillRect(
+    b.x + cameraOffsetX,
+    b.y + cameraOffsetY,
+    b.w,
+    b.h
+  );
+}
+
+// ================= COLLISION =================
+function circleRectCollision(px, py, r, rect) {
+  const cx = Math.max(rect.x, Math.min(px, rect.x + rect.w));
+  const cy = Math.max(rect.y, Math.min(py, rect.y + rect.h));
+  const dx = px - cx;
+  const dy = py - cy;
+  return dx * dx + dy * dy < r * r;
+}
+
 // ================= LOOP =================
 function update() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid();
+
+  blocks.forEach(b => drawBlock(b));
+  if (previewBlock) drawBlock(previewBlock, true);
 
   projectiles.forEach(p => {
     if (p.active) {
@@ -128,7 +157,12 @@ function update() {
       p.x = p.x0 + wx * pixelsPerUnit;
       p.y = p.y0 - wy * pixelsPerUnit;
 
-      if (p.y > canvas.height + 2000) p.active = false;
+      // Collision
+      for (const b of blocks) {
+        if (circleRectCollision(p.x, p.y, 5, b)) {
+          p.active = false;
+        }
+      }
 
       p.path.push({ x: p.x, y: p.y });
     }
@@ -175,6 +209,7 @@ launchBtn.onclick = () => {
 
 resetBtn.onclick = () => {
   projectiles = [];
+  blocks = [];
   cameraOffsetX = 0;
   cameraOffsetY = 0;
 };
@@ -195,10 +230,22 @@ cameraToggleBtn.onclick = () => {
   cameraToggleBtn.classList.toggle("active");
 };
 
-// ================= OUTLET CONTROL =================
+blockModeBtn.onclick = () => {
+  blockMode = !blockMode;
+  blockModeBtn.classList.toggle("active");
+};
+
+// ================= MOUSE =================
 canvas.addEventListener("mousedown", e => {
   const mx = e.offsetX - cameraOffsetX;
   const my = e.offsetY - cameraOffsetY;
+
+  if (blockMode) {
+    drawingBlock = true;
+    blockStart = { x: mx, y: my };
+    previewBlock = null;
+    return;
+  }
 
   const ox = +outletXInput.value;
   const oy = +outletYInput.value;
@@ -210,6 +257,16 @@ canvas.addEventListener("mousedown", e => {
 canvas.addEventListener("mousemove", e => {
   const mx = e.offsetX - cameraOffsetX;
   const my = e.offsetY - cameraOffsetY;
+
+  if (drawingBlock && blockStart) {
+    previewBlock = {
+      x: Math.min(blockStart.x, mx),
+      y: Math.min(blockStart.y, my),
+      w: Math.abs(mx - blockStart.x),
+      h: Math.abs(my - blockStart.y)
+    };
+    return;
+  }
 
   if (draggingOutlet) {
     outletXInput.value = mx;
@@ -226,6 +283,11 @@ canvas.addEventListener("mousemove", e => {
 });
 
 canvas.addEventListener("mouseup", () => {
+  if (drawingBlock && previewBlock) {
+    blocks.push(previewBlock);
+  }
+  drawingBlock = false;
+  previewBlock = null;
   draggingOutlet = false;
   rotatingAngle = false;
 });
