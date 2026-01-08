@@ -43,6 +43,12 @@ button:hover {
   background: #187bcd;
 }
 
+button.active {
+  background: #00c853;
+  color: #000;
+  font-weight: bold;
+}
+
 canvas {
   background: #000;
   margin: 20px;

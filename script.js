@@ -4,16 +4,23 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth - 320;
 canvas.height = window.innerHeight - 40;
 
-// UI
+// ================= UI =================
 const angleInput = document.getElementById("angle");
 const velocityInput = document.getElementById("velocity");
 const gravityInput = document.getElementById("gravity");
 const outletXInput = document.getElementById("outletX");
 const outletYInput = document.getElementById("outletY");
+const zoomInput = document.getElementById("zoom");
+
+const angleVal = document.getElementById("angleVal");
+const velocityVal = document.getElementById("velocityVal");
+const gravityVal = document.getElementById("gravityVal");
+const outletXVal = document.getElementById("outletXVal");
+const outletYVal = document.getElementById("outletYVal");
+const zoomVal = document.getElementById("zoomVal");
 
 const slowBtn = document.getElementById("slow");
 const pathToggleBtn = document.getElementById("pathToggle");
-const vectorToggleBtn = document.getElementById("vectorToggle");
 const cameraToggleBtn = document.getElementById("cameraToggle");
 
 const launchBtn = document.getElementById("launch");
@@ -25,7 +32,6 @@ let pixelsPerUnit = 50;
 let timeScale = 1;
 
 let showPath = true;
-let showVector = true;
 let cameraFollow = false;
 
 let cameraOffsetX = 0;
@@ -35,35 +41,59 @@ let projectiles = [];
 let draggingOutlet = false;
 let rotatingAngle = false;
 
+// ================= UI SYNC =================
+function syncUI() {
+  angleVal.textContent = angleInput.value;
+  velocityVal.textContent = velocityInput.value;
+  gravityVal.textContent = gravityInput.value;
+  outletXVal.textContent = Math.round(outletXInput.value);
+  outletYVal.textContent = Math.round(outletYInput.value);
+  zoomVal.textContent = zoomInput.value;
+}
+
+[
+  angleInput, velocityInput, gravityInput,
+  outletXInput, outletYInput, zoomInput
+].forEach(i => i.oninput = syncUI);
+
+zoomInput.oninput = () => {
+  pixelsPerUnit = Number(zoomInput.value);
+  syncUI();
+};
+
+syncUI();
+
 // ================= GRID =================
 function drawGrid() {
   ctx.strokeStyle = "#222";
   ctx.fillStyle = "#777";
   ctx.font = "12px monospace";
 
-  for (let x = -canvas.width; x < canvas.width * 2; x += GRID_SIZE) {
-    const wx = x - cameraOffsetX;
+  for (let x = 0; x < canvas.width; x += GRID_SIZE) {
+    const wx = (x - cameraOffsetX) / pixelsPerUnit;
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, canvas.height);
     ctx.stroke();
-    ctx.fillText((wx / pixelsPerUnit).toFixed(1), x + 2, 12);
+    ctx.fillText(wx.toFixed(1), x + 2, 12);
   }
 
-  for (let y = -canvas.height; y < canvas.height * 2; y += GRID_SIZE) {
-    const wy = y - cameraOffsetY;
+  for (let y = 0; y < canvas.height; y += GRID_SIZE) {
+    const wy = (y - cameraOffsetY) / pixelsPerUnit;
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(canvas.width, y);
     ctx.stroke();
-    ctx.fillText((wy / pixelsPerUnit).toFixed(1), 2, y - 2);
+    ctx.fillText(wy.toFixed(1), 2, y - 2);
   }
+
+  ctx.fillText("(0,0)", 2, 12);
 }
 
 // ================= DRAWERS =================
 function drawOutlet(x, y) {
   ctx.fillStyle = "#1e90ff";
-  ctx.fillRect(x - 10 + cameraOffsetX, y - 10 + cameraOffsetY, 20, 20);
+  ctx.fillRect(x + cameraOffsetX - 10, y + cameraOffsetY - 10, 20, 20);
 
   // Angle indicator
   ctx.strokeStyle = "#0ff";
@@ -83,37 +113,25 @@ function drawBall(x, y) {
   ctx.fill();
 }
 
-function drawVector(p) {
-  if (!showVector) return;
-  ctx.strokeStyle = "#00ff00";
-  ctx.beginPath();
-  ctx.moveTo(p.x0 + cameraOffsetX, p.y0 + cameraOffsetY);
-  ctx.lineTo(
-    p.x0 + p.vx * 10 + cameraOffsetX,
-    p.y0 - p.vy * 10 + cameraOffsetY
-  );
-  ctx.stroke();
-}
-
 // ================= LOOP =================
 function update() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid();
 
   projectiles.forEach(p => {
-    if (!p.active) return;
+    if (p.active) {
+      p.t += 0.016 * timeScale;
 
-    p.t += 0.016 * timeScale;
+      const wx = p.vx * p.t;
+      const wy = p.vy * p.t - 0.5 * gravityInput.value * p.t * p.t;
 
-    const wx = p.vx * p.t;
-    const wy = p.vy * p.t - 0.5 * gravityInput.value * p.t * p.t;
+      p.x = p.x0 + wx * pixelsPerUnit;
+      p.y = p.y0 - wy * pixelsPerUnit;
 
-    p.x = p.x0 + wx * pixelsPerUnit;
-    p.y = p.y0 - wy * pixelsPerUnit;
+      if (p.y > canvas.height + 2000) p.active = false;
 
-    if (showPath) p.path.push({ x: p.x, y: p.y });
-
-    if (p.y > canvas.height + 2000) p.active = false;
+      p.path.push({ x: p.x, y: p.y });
+    }
 
     if (showPath) {
       ctx.strokeStyle = "#ff9933";
@@ -126,9 +144,8 @@ function update() {
     }
 
     drawBall(p.x, p.y);
-    drawVector(p);
 
-    if (cameraFollow) {
+    if (cameraFollow && p.active) {
       cameraOffsetX = canvas.width / 2 - p.x;
       cameraOffsetY = canvas.height / 2 - p.y;
     }
@@ -163,12 +180,22 @@ resetBtn.onclick = () => {
 };
 
 // ================= TOGGLES =================
-slowBtn.onclick = () => timeScale = timeScale === 1 ? 0.25 : 1;
-pathToggleBtn.onclick = () => showPath = !showPath;
-vectorToggleBtn.onclick = () => showVector = !showVector;
-cameraToggleBtn.onclick = () => cameraFollow = !cameraFollow;
+slowBtn.onclick = () => {
+  timeScale = timeScale === 1 ? 0.25 : 1;
+  slowBtn.classList.toggle("active");
+};
 
-// ================= DRAG & ANGLE =================
+pathToggleBtn.onclick = () => {
+  showPath = !showPath;
+  pathToggleBtn.classList.toggle("active");
+};
+
+cameraToggleBtn.onclick = () => {
+  cameraFollow = !cameraFollow;
+  cameraToggleBtn.classList.toggle("active");
+};
+
+// ================= OUTLET CONTROL =================
 canvas.addEventListener("mousedown", e => {
   const mx = e.offsetX - cameraOffsetX;
   const my = e.offsetY - cameraOffsetY;
@@ -187,14 +214,14 @@ canvas.addEventListener("mousemove", e => {
   if (draggingOutlet) {
     outletXInput.value = mx;
     outletYInput.value = my;
+    syncUI();
   }
 
   if (rotatingAngle) {
     const ox = +outletXInput.value;
     const oy = +outletYInput.value;
-    const dx = mx - ox;
-    const dy = oy - my;
-    angleInput.value = Math.atan2(dy, dx) * 180 / Math.PI;
+    angleInput.value = Math.atan2(oy - my, mx - ox) * 180 / Math.PI;
+    syncUI();
   }
 });
 
