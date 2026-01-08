@@ -8,11 +8,9 @@ canvas.height = window.innerHeight - 40;
 const angleInput = document.getElementById("angle");
 const velocityInput = document.getElementById("velocity");
 const gravityInput = document.getElementById("gravity");
-
 const outletXInput = document.getElementById("outletX");
 const outletYInput = document.getElementById("outletY");
 
-// Value displays
 const angleVal = document.getElementById("angleVal");
 const velocityVal = document.getElementById("velocityVal");
 const gravityVal = document.getElementById("gravityVal");
@@ -22,46 +20,59 @@ const outletYVal = document.getElementById("outletYVal");
 const launchBtn = document.getElementById("launch");
 const resetBtn = document.getElementById("reset");
 
-const SCALE = 6;
-let projectiles = [];
+// ================= WORLD SETTINGS =================
+const GRID_SIZE = 50;          // pixels (constant)
+let pixelsPerUnit = 50;        // zoom target
+const BASE_PPU = 50;
 
-// Drag logic
+let projectiles = [];
 let draggingOutlet = false;
 
-// UI updates
+// ================= UI =================
 angleInput.oninput = () => angleVal.textContent = angleInput.value;
 velocityInput.oninput = () => velocityVal.textContent = velocityInput.value;
 gravityInput.oninput = () => gravityVal.textContent = gravityInput.value;
 outletXInput.oninput = () => outletXVal.textContent = outletXInput.value;
 outletYInput.oninput = () => outletYVal.textContent = outletYInput.value;
 
-// Draw grid
+// ================= GRID =================
 function drawGrid() {
   ctx.strokeStyle = "#222";
-  ctx.lineWidth = 1;
+  ctx.fillStyle = "#777";
+  ctx.font = "12px monospace";
 
-  for (let x = 0; x < canvas.width; x += 50) {
+  // Vertical lines
+  for (let x = 0; x < canvas.width; x += GRID_SIZE) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, canvas.height);
     ctx.stroke();
+
+    const value = (x / pixelsPerUnit).toFixed(1);
+    ctx.fillText(value, x + 2, 12);
   }
 
-  for (let y = 0; y < canvas.height; y += 50) {
+  // Horizontal lines
+  for (let y = 0; y < canvas.height; y += GRID_SIZE) {
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(canvas.width, y);
     ctx.stroke();
+
+    const value = (y / pixelsPerUnit).toFixed(1);
+    ctx.fillText(value, 2, y - 2);
   }
+
+  // Origin label
+  ctx.fillText("(0,0)", 2, 12);
 }
 
-// Draw outlet
+// ================= DRAWERS =================
 function drawOutlet(x, y) {
   ctx.fillStyle = "#1e90ff";
   ctx.fillRect(x - 10, y - 10, 20, 20);
 }
 
-// Draw projectile
 function drawBall(x, y, color = "red") {
   ctx.beginPath();
   ctx.arc(x, y, 5, 0, Math.PI * 2);
@@ -69,46 +80,44 @@ function drawBall(x, y, color = "red") {
   ctx.fill();
 }
 
-// Main render loop
+// ================= MAIN LOOP =================
 function update() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
   drawGrid();
 
-  // Update projectiles
   projectiles.forEach(p => {
-    if (!p.active) return;
+    if (!p.active) {
+      drawBall(p.x, p.y, "#ff9933");
+      return;
+    }
 
     p.t += 0.05;
 
-    const x = p.x0 + p.vx * p.t * SCALE;
-    const y = p.y0 - (p.vy * p.t * SCALE - 0.5 * gravityInput.value * p.t * p.t * SCALE);
+    const worldX = p.vx * p.t;
+    const worldY = p.vy * p.t - 0.5 * gravityInput.value * p.t * p.t;
 
-    if (y > canvas.height - 5) {
+    p.x = p.x0 + worldX * pixelsPerUnit;
+    p.y = p.y0 - worldY * pixelsPerUnit;
+
+    if (p.y > canvas.height + 1000) {
       p.active = false;
-      p.y = canvas.height - 5;
-      p.x = x;
-    } else {
-      p.x = x;
-      p.y = y;
     }
 
     drawBall(p.x, p.y);
   });
 
-  drawOutlet(outletXInput.value, outletYInput.value);
-
+  drawOutlet(+outletXInput.value, +outletYInput.value);
   requestAnimationFrame(update);
 }
 
-// Launch new projectile
+// ================= ACTIONS =================
 launchBtn.onclick = () => {
   const angle = angleInput.value * Math.PI / 180;
   const velocity = velocityInput.value;
 
   projectiles.push({
-    x0: Number(outletXInput.value),
-    y0: Number(outletYInput.value),
+    x0: +outletXInput.value,
+    y0: +outletYInput.value,
     vx: velocity * Math.cos(angle),
     vy: velocity * Math.sin(angle),
     t: 0,
@@ -116,19 +125,18 @@ launchBtn.onclick = () => {
   });
 };
 
-// Reset
 resetBtn.onclick = () => {
   projectiles = [];
 };
 
-// Mouse interaction for dragging outlet
+// ================= DRAG OUTLET =================
 canvas.addEventListener("mousedown", e => {
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
 
-  const ox = outletXInput.value;
-  const oy = outletYInput.value;
+  const ox = +outletXInput.value;
+  const oy = +outletYInput.value;
 
   if (Math.abs(mx - ox) < 15 && Math.abs(my - oy) < 15) {
     draggingOutlet = true;
@@ -142,15 +150,23 @@ canvas.addEventListener("mousemove", e => {
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
 
-  outletXInput.value = Math.max(0, Math.min(canvas.width, mx));
-  outletYInput.value = Math.max(0, Math.min(canvas.height, my));
+  outletXInput.value = mx;
+  outletYInput.value = my;
 
-  outletXVal.textContent = outletXInput.value;
-  outletYVal.textContent = outletYInput.value;
+  outletXVal.textContent = mx.toFixed(0);
+  outletYVal.textContent = my.toFixed(0);
 });
 
 canvas.addEventListener("mouseup", () => draggingOutlet = false);
 canvas.addEventListener("mouseleave", () => draggingOutlet = false);
 
-// Start loop
+// ================= ZOOM (UNIT SCALE ONLY) =================
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+
+  pixelsPerUnit += e.deltaY * -0.5;
+  pixelsPerUnit = Math.max(10, Math.min(200, pixelsPerUnit));
+});
+
+// ================= START =================
 update();
