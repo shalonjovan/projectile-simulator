@@ -45,13 +45,14 @@ let blocks = [];
 let draggingOutlet = false;
 let rotatingAngle = false;
 let drawingBlock = false;
+let draggingBlock = null;
 
 let blockStart = null;
 let previewBlock = null;
 
 // ================= UI SYNC =================
 function syncUI() {
-  angleVal.textContent = angleInput.value;
+  angleVal.textContent = Math.round(angleInput.value);
   velocityVal.textContent = velocityInput.value;
   gravityVal.textContent = gravityInput.value;
   outletXVal.textContent = Math.round(outletXInput.value);
@@ -98,17 +99,18 @@ function drawGrid() {
   ctx.fillText("(0,0)", 2, 12);
 }
 
-// ================= DRAWERS =================
+// ================= DRAW =================
 function drawOutlet(x, y) {
   ctx.fillStyle = "#1e90ff";
   ctx.fillRect(x + cameraOffsetX - 10, y + cameraOffsetY - 10, 20, 20);
 
+  const a = angleInput.value * Math.PI / 180;
   ctx.strokeStyle = "#0ff";
   ctx.beginPath();
   ctx.moveTo(x + cameraOffsetX, y + cameraOffsetY);
   ctx.lineTo(
-    x + Math.cos(angleInput.value * Math.PI / 180) * 40 + cameraOffsetX,
-    y - Math.sin(angleInput.value * Math.PI / 180) * 40 + cameraOffsetY
+    x + Math.cos(a) * 40 + cameraOffsetX,
+    y + Math.sin(a) * 40 + cameraOffsetY
   );
   ctx.stroke();
 }
@@ -121,7 +123,9 @@ function drawBall(x, y) {
 }
 
 function drawBlock(b, preview = false) {
-  ctx.fillStyle = preview ? "rgba(0,200,0,0.3)" : "rgba(200,200,200,0.6)";
+  ctx.fillStyle = preview
+    ? "rgba(0,200,0,0.3)"
+    : "rgba(200,200,200,0.6)";
   ctx.fillRect(
     b.x + cameraOffsetX,
     b.y + cameraOffsetY,
@@ -131,12 +135,12 @@ function drawBlock(b, preview = false) {
 }
 
 // ================= COLLISION =================
-function circleRectCollision(px, py, r, rect) {
-  const cx = Math.max(rect.x, Math.min(px, rect.x + rect.w));
-  const cy = Math.max(rect.y, Math.min(py, rect.y + rect.h));
+function circleRectCollision(px, py, r, b) {
+  const cx = Math.max(b.x, Math.min(px, b.x + b.w));
+  const cy = Math.max(b.y, Math.min(py, b.y + b.h));
   const dx = px - cx;
   const dy = py - cy;
-  return dx * dx + dy * dy < r * r;
+  return dx * dx + dy * dy <= r * r;
 }
 
 // ================= LOOP =================
@@ -151,16 +155,18 @@ function update() {
     if (p.active) {
       p.t += 0.016 * timeScale;
 
+      // PHYSICS (correct gravity direction)
       const wx = p.vx * p.t;
-      const wy = p.vy * p.t - 0.5 * gravityInput.value * p.t * p.t;
+      const wy = p.vy * p.t + 0.5 * gravityInput.value * p.t * p.t;
 
       p.x = p.x0 + wx * pixelsPerUnit;
-      p.y = p.y0 - wy * pixelsPerUnit;
+      p.y = p.y0 + wy * pixelsPerUnit;
 
-      // Collision
+      // Collision with blocks (stop)
       for (const b of blocks) {
         if (circleRectCollision(p.x, p.y, 5, b)) {
           p.active = false;
+          break;
         }
       }
 
@@ -191,14 +197,14 @@ function update() {
 
 // ================= ACTIONS =================
 launchBtn.onclick = () => {
-  const angle = angleInput.value * Math.PI / 180;
-  const velocity = velocityInput.value;
+  const a = angleInput.value * Math.PI / 180;
+  const v = velocityInput.value;
 
   projectiles.push({
     x0: +outletXInput.value,
     y0: +outletYInput.value,
-    vx: velocity * Math.cos(angle),
-    vy: velocity * Math.sin(angle),
+    vx: Math.cos(a) * v,
+    vy: Math.sin(a) * v,
     t: 0,
     x: 0,
     y: 0,
@@ -247,6 +253,14 @@ canvas.addEventListener("mousedown", e => {
     return;
   }
 
+  for (const b of blocks) {
+    if (mx >= b.x && mx <= b.x + b.w &&
+        my >= b.y && my <= b.y + b.h) {
+      draggingBlock = b;
+      return;
+    }
+  }
+
   const ox = +outletXInput.value;
   const oy = +outletYInput.value;
 
@@ -268,6 +282,12 @@ canvas.addEventListener("mousemove", e => {
     return;
   }
 
+  if (draggingBlock) {
+    draggingBlock.x = mx - draggingBlock.w / 2;
+    draggingBlock.y = my - draggingBlock.h / 2;
+    return;
+  }
+
   if (draggingOutlet) {
     outletXInput.value = mx;
     outletYInput.value = my;
@@ -277,19 +297,19 @@ canvas.addEventListener("mousemove", e => {
   if (rotatingAngle) {
     const ox = +outletXInput.value;
     const oy = +outletYInput.value;
-    angleInput.value = Math.atan2(oy - my, mx - ox) * 180 / Math.PI;
+    angleInput.value =
+      (Math.atan2(my - oy, mx - ox) * 180 / Math.PI + 360) % 360;
     syncUI();
   }
 });
 
 canvas.addEventListener("mouseup", () => {
-  if (drawingBlock && previewBlock) {
-    blocks.push(previewBlock);
-  }
+  if (drawingBlock && previewBlock) blocks.push(previewBlock);
   drawingBlock = false;
   previewBlock = null;
   draggingOutlet = false;
   rotatingAngle = false;
+  draggingBlock = null;
 });
 
 // ================= START =================
