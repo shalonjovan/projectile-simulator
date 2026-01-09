@@ -4,6 +4,12 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth - 320;
 canvas.height = window.innerHeight - 40;
 
+// ================= CONSTANTS =================
+const GRID_SIZE = 50;
+const BALL_RADIUS = 5;
+const RESTITUTION = 0.8;
+const SUBSTEPS = 6;
+
 // ================= UI =================
 const angleInput = document.getElementById("angle");
 const velocityInput = document.getElementById("velocity");
@@ -28,7 +34,6 @@ const launchBtn = document.getElementById("launch");
 const resetBtn = document.getElementById("reset");
 
 // ================= WORLD =================
-const GRID_SIZE = 50;
 let pixelsPerUnit = 50;
 let timeScale = 1;
 
@@ -42,6 +47,7 @@ let cameraOffsetY = 0;
 let projectiles = [];
 let blocks = [];
 
+// interaction state
 let draggingOutlet = false;
 let rotatingAngle = false;
 let drawingBlock = false;
@@ -63,7 +69,7 @@ function syncUI() {
 [
   angleInput, velocityInput, gravityInput,
   outletXInput, outletYInput, zoomInput
-].forEach(i => i.oninput = syncUI);
+].forEach(el => el.oninput = syncUI);
 
 zoomInput.oninput = () => {
   pixelsPerUnit = Number(zoomInput.value);
@@ -117,7 +123,7 @@ function drawOutlet(x, y) {
 
 function drawBall(x, y) {
   ctx.beginPath();
-  ctx.arc(x + cameraOffsetX, y + cameraOffsetY, 5, 0, Math.PI * 2);
+  ctx.arc(x + cameraOffsetX, y + cameraOffsetY, BALL_RADIUS, 0, Math.PI * 2);
   ctx.fillStyle = "red";
   ctx.fill();
 }
@@ -135,15 +141,32 @@ function drawBlock(b, preview = false) {
 }
 
 // ================= COLLISION =================
-function circleRectCollision(px, py, r, b) {
-  const cx = Math.max(b.x, Math.min(px, b.x + b.w));
-  const cy = Math.max(b.y, Math.min(py, b.y + b.h));
-  const dx = px - cx;
-  const dy = py - cy;
-  return dx * dx + dy * dy <= r * r;
+function resolveCircleRectCollision(p, b) {
+  const cx = Math.max(b.x, Math.min(p.x, b.x + b.w));
+  const cy = Math.max(b.y, Math.min(p.y, b.y + b.h));
+
+  const dx = p.x - cx;
+  const dy = p.y - cy;
+
+  const distSq = dx * dx + dy * dy;
+  if (distSq > BALL_RADIUS * BALL_RADIUS) return;
+
+  const dist = Math.sqrt(distSq) || 0.0001;
+  const nx = dx / dist;
+  const ny = dy / dist;
+
+  const penetration = BALL_RADIUS - dist;
+  p.x += nx * penetration;
+  p.y += ny * penetration;
+
+  const vDotN = p.vx * nx + p.vy * ny;
+  if (vDotN < 0) {
+    p.vx -= (1 + RESTITUTION) * vDotN * nx;
+    p.vy -= (1 + RESTITUTION) * vDotN * ny;
+  }
 }
 
-// ================= LOOP =================
+// ================= MAIN LOOP =================
 function update() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid();
@@ -151,41 +174,39 @@ function update() {
   blocks.forEach(b => drawBlock(b));
   if (previewBlock) drawBlock(previewBlock, true);
 
+  const frameDt = 0.016 * timeScale;
+  const subDt = frameDt / SUBSTEPS;
+
   projectiles.forEach(p => {
-    if (p.active) {
-      p.t += 0.016 * timeScale;
+    for (let i = 0; i < SUBSTEPS; i++) {
+      p.vy += gravityInput.value * subDt;
+      p.x += p.vx * subDt * pixelsPerUnit;
+      p.y += p.vy * subDt * pixelsPerUnit;
 
-      // PHYSICS (correct gravity direction)
-      const wx = p.vx * p.t;
-      const wy = p.vy * p.t + 0.5 * gravityInput.value * p.t * p.t;
-
-      p.x = p.x0 + wx * pixelsPerUnit;
-      p.y = p.y0 + wy * pixelsPerUnit;
-
-      // Collision with blocks (stop)
       for (const b of blocks) {
-        if (circleRectCollision(p.x, p.y, 5, b)) {
-          p.active = false;
-          break;
-        }
+        resolveCircleRectCollision(p, b);
       }
-
-      p.path.push({ x: p.x, y: p.y });
     }
 
+    // ALWAYS store path
+    p.path.push({ x: p.x, y: p.y });
+
+    // DRAW PATH ONLY IF TOGGLED ON
     if (showPath) {
       ctx.strokeStyle = "#ff9933";
       ctx.beginPath();
       p.path.forEach((pt, i) => {
-        if (i === 0) ctx.moveTo(pt.x + cameraOffsetX, pt.y + cameraOffsetY);
-        else ctx.lineTo(pt.x + cameraOffsetX, pt.y + cameraOffsetY);
+        if (i === 0)
+          ctx.moveTo(pt.x + cameraOffsetX, pt.y + cameraOffsetY);
+        else
+          ctx.lineTo(pt.x + cameraOffsetX, pt.y + cameraOffsetY);
       });
       ctx.stroke();
     }
 
     drawBall(p.x, p.y);
 
-    if (cameraFollow && p.active) {
+    if (cameraFollow) {
       cameraOffsetX = canvas.width / 2 - p.x;
       cameraOffsetY = canvas.height / 2 - p.y;
     }
@@ -201,15 +222,11 @@ launchBtn.onclick = () => {
   const v = velocityInput.value;
 
   projectiles.push({
-    x0: +outletXInput.value,
-    y0: +outletYInput.value,
+    x: +outletXInput.value,
+    y: +outletYInput.value,
     vx: Math.cos(a) * v,
     vy: Math.sin(a) * v,
-    t: 0,
-    x: 0,
-    y: 0,
-    path: [],
-    active: true
+    path: []
   });
 };
 
