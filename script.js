@@ -7,7 +7,8 @@ canvas.height = window.innerHeight - 40;
 // ================= CONSTANTS =================
 const GRID_SIZE = 50;
 const BALL_RADIUS = 5;
-const RESTITUTION = 0.8; // coefficient of restitution (bounce)
+const RESTITUTION = 0.8;      // bounce energy
+const SUBSTEPS = 6;           // anti-tunneling (5–10 is ideal)
 
 // ================= UI =================
 const angleInput = document.getElementById("angle");
@@ -32,7 +33,7 @@ const blockModeBtn = document.getElementById("blockMode");
 const launchBtn = document.getElementById("launch");
 const resetBtn = document.getElementById("reset");
 
-// ================= WORLD STATE =================
+// ================= WORLD =================
 let pixelsPerUnit = 50;
 let timeScale = 1;
 
@@ -139,7 +140,7 @@ function drawBlock(b, preview = false) {
   );
 }
 
-// ================= COLLISION (RIGID BODY) =================
+// ================= COLLISION =================
 function resolveCircleRectCollision(p, b) {
   const cx = Math.max(b.x, Math.min(p.x, b.x + b.w));
   const cy = Math.max(b.y, Math.min(p.y, b.y + b.h));
@@ -147,26 +148,25 @@ function resolveCircleRectCollision(p, b) {
   const dx = p.x - cx;
   const dy = p.y - cy;
 
-  if (dx * dx + dy * dy > BALL_RADIUS * BALL_RADIUS) return;
+  const distSq = dx * dx + dy * dy;
+  if (distSq > BALL_RADIUS * BALL_RADIUS) return;
 
-  // determine collision normal
-  let nx = 0, ny = 0;
-  if (Math.abs(dx) > Math.abs(dy)) {
-    nx = dx > 0 ? 1 : -1;
-  } else {
-    ny = dy > 0 ? 1 : -1;
-  }
+  const dist = Math.sqrt(distSq) || 0.0001;
 
+  const nx = dx / dist;
+  const ny = dy / dist;
+
+  // push projectile out of block
+  const penetration = BALL_RADIUS - dist;
+  p.x += nx * penetration;
+  p.y += ny * penetration;
+
+  // reflect velocity (conservation of momentum)
   const vDotN = p.vx * nx + p.vy * ny;
-  if (vDotN > 0) return;
-
-  // momentum conservation (rigid wall)
-  p.vx -= (1 + RESTITUTION) * vDotN * nx;
-  p.vy -= (1 + RESTITUTION) * vDotN * ny;
-
-  // positional correction
-  p.x += nx * BALL_RADIUS;
-  p.y += ny * BALL_RADIUS;
+  if (vDotN < 0) {
+    p.vx -= (1 + RESTITUTION) * vDotN * nx;
+    p.vy -= (1 + RESTITUTION) * vDotN * ny;
+  }
 }
 
 // ================= MAIN LOOP =================
@@ -177,23 +177,25 @@ function update() {
   blocks.forEach(b => drawBlock(b));
   if (previewBlock) drawBlock(previewBlock, true);
 
-  const dt = 0.016 * timeScale;
+  const frameDt = 0.016 * timeScale;
+  const subDt = frameDt / SUBSTEPS;
 
   projectiles.forEach(p => {
-    // gravity
-    p.vy += gravityInput.value * dt;
+    for (let i = 0; i < SUBSTEPS; i++) {
+      // gravity
+      p.vy += gravityInput.value * subDt;
 
-    // integrate position
-    p.x += p.vx * dt * pixelsPerUnit;
-    p.y += p.vy * dt * pixelsPerUnit;
+      // integrate
+      p.x += p.vx * subDt * pixelsPerUnit;
+      p.y += p.vy * subDt * pixelsPerUnit;
 
-    // collisions
-    for (const b of blocks) {
-      resolveCircleRectCollision(p, b);
+      // collisions
+      for (const b of blocks) {
+        resolveCircleRectCollision(p, b);
+      }
     }
 
     if (showPath) p.path.push({ x: p.x, y: p.y });
-
     drawBall(p.x, p.y);
 
     if (cameraFollow) {
@@ -216,7 +218,6 @@ launchBtn.onclick = () => {
     y: +outletYInput.value,
     vx: Math.cos(a) * v,
     vy: Math.sin(a) * v,
-    mass: 1,
     path: []
   });
 };
