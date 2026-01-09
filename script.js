@@ -10,6 +10,9 @@ const BALL_RADIUS = 5;
 const RESTITUTION = 0.8;
 const SUBSTEPS = 6;
 
+// air resistance
+const AIR_DRAG_COEFF = 0.02; // tweak for realism
+
 // ================= UI =================
 const angleInput = document.getElementById("angle");
 const velocityInput = document.getElementById("velocity");
@@ -29,6 +32,7 @@ const slowBtn = document.getElementById("slow");
 const pathToggleBtn = document.getElementById("pathToggle");
 const cameraToggleBtn = document.getElementById("cameraToggle");
 const blockModeBtn = document.getElementById("blockMode");
+const airToggleBtn = document.getElementById("airToggle");
 
 const launchBtn = document.getElementById("launch");
 const resetBtn = document.getElementById("reset");
@@ -40,6 +44,7 @@ let timeScale = 1;
 let showPath = true;
 let cameraFollow = false;
 let blockMode = false;
+let airResistance = false;
 
 let cameraOffsetX = 0;
 let cameraOffsetY = 0;
@@ -179,7 +184,20 @@ function update() {
 
   projectiles.forEach(p => {
     for (let i = 0; i < SUBSTEPS; i++) {
+      // gravity
       p.vy += gravityInput.value * subDt;
+
+      // air resistance
+      if (airResistance) {
+        const speed = Math.hypot(p.vx, p.vy);
+        if (speed > 0) {
+          const drag = AIR_DRAG_COEFF * speed;
+          p.vx -= drag * p.vx * subDt;
+          p.vy -= drag * p.vy * subDt;
+        }
+      }
+
+      // integrate
       p.x += p.vx * subDt * pixelsPerUnit;
       p.y += p.vy * subDt * pixelsPerUnit;
 
@@ -188,10 +206,8 @@ function update() {
       }
     }
 
-    // ALWAYS store path
     p.path.push({ x: p.x, y: p.y });
 
-    // DRAW PATH ONLY IF TOGGLED ON
     if (showPath) {
       ctx.strokeStyle = "#ff9933";
       ctx.beginPath();
@@ -256,6 +272,11 @@ cameraToggleBtn.onclick = () => {
 blockModeBtn.onclick = () => {
   blockMode = !blockMode;
   blockModeBtn.classList.toggle("active");
+};
+
+airToggleBtn.onclick = () => {
+  airResistance = !airResistance;
+  airToggleBtn.classList.toggle("active");
 };
 
 // ================= MOUSE =================
