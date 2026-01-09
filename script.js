@@ -7,8 +7,8 @@ canvas.height = window.innerHeight - 40;
 // ================= CONSTANTS =================
 const GRID_SIZE = 50;
 const BALL_RADIUS = 5;
-const RESTITUTION = 0.8;      // bounce energy
-const SUBSTEPS = 6;           // anti-tunneling (5–10 is ideal)
+const RESTITUTION = 0.8;
+const SUBSTEPS = 6;
 
 // ================= UI =================
 const angleInput = document.getElementById("angle");
@@ -152,16 +152,13 @@ function resolveCircleRectCollision(p, b) {
   if (distSq > BALL_RADIUS * BALL_RADIUS) return;
 
   const dist = Math.sqrt(distSq) || 0.0001;
-
   const nx = dx / dist;
   const ny = dy / dist;
 
-  // push projectile out of block
   const penetration = BALL_RADIUS - dist;
   p.x += nx * penetration;
   p.y += ny * penetration;
 
-  // reflect velocity (conservation of momentum)
   const vDotN = p.vx * nx + p.vy * ny;
   if (vDotN < 0) {
     p.vx -= (1 + RESTITUTION) * vDotN * nx;
@@ -182,20 +179,31 @@ function update() {
 
   projectiles.forEach(p => {
     for (let i = 0; i < SUBSTEPS; i++) {
-      // gravity
       p.vy += gravityInput.value * subDt;
-
-      // integrate
       p.x += p.vx * subDt * pixelsPerUnit;
       p.y += p.vy * subDt * pixelsPerUnit;
 
-      // collisions
       for (const b of blocks) {
         resolveCircleRectCollision(p, b);
       }
     }
 
-    if (showPath) p.path.push({ x: p.x, y: p.y });
+    // ALWAYS store path
+    p.path.push({ x: p.x, y: p.y });
+
+    // DRAW PATH ONLY IF TOGGLED ON
+    if (showPath) {
+      ctx.strokeStyle = "#ff9933";
+      ctx.beginPath();
+      p.path.forEach((pt, i) => {
+        if (i === 0)
+          ctx.moveTo(pt.x + cameraOffsetX, pt.y + cameraOffsetY);
+        else
+          ctx.lineTo(pt.x + cameraOffsetX, pt.y + cameraOffsetY);
+      });
+      ctx.stroke();
+    }
+
     drawBall(p.x, p.y);
 
     if (cameraFollow) {
