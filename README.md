@@ -1,4 +1,4 @@
-# 🚀 Projectile Motion Simulator
+# Projectile Motion Simulator
 
 An interactive, browser-based physics simulation that visualizes **projectile motion** with realistic behavior such as **gravity, air resistance, collisions, and momentum-conserving bounces**.
 
@@ -6,7 +6,7 @@ Built for **Simverse Hackathon 2025**, this project focuses on making physics in
 
 ---
 
-## 📌 About
+## About
 
 Understanding projectile motion through equations alone can be unintuitive.  
 This simulator bridges the gap between **theory and visualization** by allowing users to interactively modify physical parameters and observe how motion changes in real time.
@@ -19,7 +19,7 @@ The simulator acts as a **physics sandbox**, enabling users to:
 
 ---
 
-## ✨ Features
+## Features
 
 - Real-time projectile motion simulation  
 - Launch projectiles at **any angle (0°–360°)**  
@@ -41,7 +41,7 @@ The simulator acts as a **physics sandbox**, enabling users to:
 
 ---
 
-## 🧠 Physics Concepts Used
+## Physics Concepts Used
 
 - Kinematic equations of motion  
 - Velocity-based numerical integration  
@@ -52,18 +52,8 @@ The simulator acts as a **physics sandbox**, enabling users to:
 
 ---
 
-## 🛠️ Tech Stack
 
-- **HTML5** – Structure  
-- **CSS3** – Styling & layout  
-- **JavaScript (Vanilla)** – Physics engine & interactivity  
-- **HTML5 Canvas API** – Rendering & animation  
-
-No external libraries or physics engines are used.
-
----
-
-## 🧩 System Architecture
+## System Architecture
 
 - Runs entirely on the **client side**
 - User input handled via UI controls and mouse events
@@ -77,10 +67,10 @@ This design ensures **high performance, simplicity, and easy deployment**.
 
 ---
 
-## 🚀 How to Run
+## How to Run
 
 1. Clone the repository  
 2. Open `index.html` in any modern browser  
-3. Start experimenting 🚀  
+3. Start experimenting 
 
 No installation or setup required.
